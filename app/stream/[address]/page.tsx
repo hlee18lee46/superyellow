@@ -1,24 +1,51 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits } from "viem";
 import { useParams } from "next/navigation";
 import { useWallet } from "@/context/WalletContext";
 import BadgeCard from "@/components/BadgeCard";
 import { ADDR, BADGES, TIERS } from "@/lib/addresses";
-import { publicClient, walletClient } from "@/lib/viem";
-import { erc20Abi, tipRouterAbi } from "@/types/abi";
+import { erc20Abi } from "@/types/abi";
+import { publicClient } from "@/lib/viem";
 
 export default function StreamPage() {
   const params = useParams<{ address: `0x${string}` }>();
-  const STREAMER = params.address as `0x${string}`;
-  const { address } = useWallet(); // 🔹 global wallet
+  const STREAMER = params.address;
+  const { address } = useWallet();
 
-  const [yusdBal, setYusdBal] = useState<string>("0");
-  const [prices, setPrices] = useState<Record<string, string>>({});
+  const [pyusdBal, setPyusdBal] = useState("0");
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
   const [msg, setMsg] = useState("🔥 Superchat!");
 
+  // 🔹 1. Create or join Yellow off-chain session via API
+  useEffect(() => {
+    if (!address || sessionId) return;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/yellow/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            viewer: address,
+            treasury: process.env.NEXT_PUBLIC_TREASURY!,
+            token: ADDR.PYUSD,
+            deposit: "10", // off-chain allowance for demo
+          }),
+        });
+
+        const { channelId } = await res.json();
+        setSessionId(channelId);
+        console.log("✅ Yellow session created:", channelId);
+      } catch (err) {
+        console.error("❌ Yellow init error:", err);
+      }
+    })();
+  }, [address, sessionId]);
+
+  // 🔹 2. Fetch PYUSD balance
   useEffect(() => {
     if (!address) return;
     (async () => {
@@ -28,63 +55,35 @@ export default function StreamPage() {
         functionName: "balanceOf",
         args: [address],
       })) as bigint;
-      setYusdBal(formatUnits(bal, 18));
-
-      const ps: Record<string, string> = {};
-      for (const b of BADGES) {
-        const p = (await publicClient.readContract({
-          address: ADDR.ROUTER,
-          abi: tipRouterAbi,
-          functionName: "price",
-          args: [b.addr],
-        })) as bigint;
-        ps[b.addr] = formatUnits(p, 18);
-      }
-      setPrices(ps);
+      setPyusdBal(formatUnits(bal, 18));
     })();
   }, [address]);
 
-  async function ensureAllowance(needed: bigint) {
-    if (!address) return;
-    const allowance = (await publicClient.readContract({
-      address: ADDR.PYUSD,
-      abi: erc20Abi,
-      functionName: "allowance",
-      args: [address, ADDR.ROUTER],
-    })) as bigint;
-    if (allowance >= needed) return;
-    const wc = walletClient();
-    const tx = await wc.writeContract({
-      address: ADDR.PYUSD,
-      abi: erc20Abi,
-      functionName: "approve",
-      args: [ADDR.ROUTER, needed],
-    });
-    await publicClient.waitForTransactionReceipt({ hash: tx });
-  }
-
-  async function sendTip(badgeAddr: `0x${string}`, tierYusd: string) {
-    if (!address) return alert("Connect your wallet in the header first.");
-    const amount = parseUnits(tierYusd, 18);
+  // 🔹 3. Send off-chain Yellow tip (fast, gasless)
+  async function sendOffchainTip(badgeAddr: `0x${string}`, tierYusd: string) {
+    if (!address || !sessionId) return alert("Connect your wallet first.");
     setSending(`${badgeAddr}:${tierYusd}`);
+
     try {
-      await ensureAllowance(amount);
-      const wc = walletClient();
-      const tx = await wc.writeContract({
-        address: ADDR.ROUTER,
-        abi: tipRouterAbi,
-        functionName: "tip",
-        args: [badgeAddr, STREAMER, amount, msg],
+      const res = await fetch("/api/yellow/tip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: sessionId,
+          viewer: address,
+          streamer: STREAMER,
+          treasury: process.env.NEXT_PUBLIC_TREASURY!,
+          token: ADDR.PYUSD,
+          amount: tierYusd,
+          badge: badgeAddr,
+          message: msg,
+        }),
       });
-      await publicClient.waitForTransactionReceipt({ hash: tx });
-      // refresh balance
-      const bal = (await publicClient.readContract({
-        address: ADDR.PYUSD,
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [address],
-      })) as bigint;
-      setYusdBal(formatUnits(bal, 18));
+
+      const r = await res.json();
+      console.log("💬 Off-chain tip sent:", r);
+    } catch (err) {
+      console.error("❌ Off-chain tip error:", err);
     } finally {
       setSending(null);
     }
@@ -92,16 +91,12 @@ export default function StreamPage() {
 
   return (
     <main className="p-6 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Live Stream</h1>
-        <div className="text-sm opacity-70 break-all">Streamer: {STREAMER}</div>
-      </div>
+      <h1 className="text-2xl font-bold">Live Stream</h1>
 
       <div className="w-full aspect-video bg-black/80 rounded-lg grid place-items-center text-white">
         Stream Video
       </div>
 
-      <label className="block text-sm">Message to streamer</label>
       <input
         className="border rounded w-full px-3 py-2"
         value={msg}
@@ -109,10 +104,8 @@ export default function StreamPage() {
         placeholder="Say something nice ✨"
       />
 
-      <div className="flex items-center justify-between">
-        <div className="rounded p-2 bg-zinc-900 text-white">
-          {address ? `Your YUSD: ${yusdBal}` : "Connect wallet in header to tip"}
-        </div>
+      <div className="rounded p-2 bg-zinc-900 text-white">
+        {address ? `Your PYUSD: ${pyusdBal}` : "Connect wallet in header"}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -121,9 +114,9 @@ export default function StreamPage() {
             key={b.addr}
             label={b.label}
             addressKey={b.addr}
-            rate={prices[b.addr]}
+            rate={b.price.toString()}
             loadingKey={sending}
-            onClickTier={(tier) => sendTip(b.addr, tier)}
+            onClickTier={(tier) => sendOffchainTip(b.addr, tier)}
             tiers={TIERS}
           />
         ))}

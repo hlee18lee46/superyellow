@@ -1,32 +1,43 @@
+// components/BadgeCard.tsx
 "use client";
-import { useMemo } from "react";
-
 type Props = {
   label: string;
-  rate: string | undefined;             // tokens per 1 YUSD
-  onClickTier: (tierYusd: string) => void;
+  addressKey: `0x${string}`;
+  rate?: string;                  // e.g. "1", "2", "3", "5" as PYUSD
+  tiers: string[];                // ["1","2","3","5"] etc
   loadingKey: string | null;
-  addressKey: string;                    // unique id (address)
-  tiers?: string[];                      // default 1/2/3/5
+  onClickTier: (tier: string) => void;
+  currencyLabel?: string;         // <-- NEW
 };
 
-export default function BadgeCard({ label, rate, onClickTier, loadingKey, addressKey, tiers = ["1","2","3","5"] }: Props) {
-  const isLoading = (tier: string) => loadingKey === `${addressKey}:${tier}`;
-  const title = useMemo(()=>label, [label]);
+export default function BadgeCard({
+  label,
+  addressKey,
+  rate,
+  tiers,
+  loadingKey,
+  onClickTier,
+  currencyLabel = "PYUSD",        // default to PYUSD
+}: Props) {
+  const isLoading = (t: string) => loadingKey === `${addressKey}:${t}`;
 
   return (
-    <div className="border rounded p-3 flex flex-col gap-2">
-      <div className="font-semibold">{title}</div>
-      <div className="text-xs opacity-70">Rate: 1 YUSD → {rate ?? "..."} {label}</div>
-      <div className="grid grid-cols-2 gap-2 mt-2">
-        {tiers.map(tier => (
+    <div className="border rounded-lg p-4 space-y-3">
+      <div className="text-lg font-semibold">{label}</div>
+      {rate && (
+        <div className="text-xs opacity-70">
+          Rate: {rate} {currencyLabel} → ... {label}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {tiers.map((t) => (
           <button
-            key={tier}
-            disabled={isLoading(tier)}
-            onClick={()=>onClickTier(tier)}
-            className="px-2 py-2 rounded border hover:bg-indigo-50 disabled:opacity-50"
+            key={t}
+            onClick={() => onClickTier(t)}
+            disabled={isLoading(t)}
+            className="border rounded px-3 py-2 text-sm hover:bg-accent disabled:opacity-60"
           >
-            {isLoading(tier) ? "Sending…" : `${tier} YUSD`}
+            {isLoading(t) ? "Sending..." : `${t} ${currencyLabel}`}
           </button>
         ))}
       </div>

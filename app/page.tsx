@@ -1,123 +1,122 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { useWallet } from "@/context/WalletContext";
 
-type ActiveStream = { address: `0x${string}`; name: string; startedAt: number };
-
-function getActiveStreams(): ActiveStream[] {
-  if (typeof window === "undefined") return [];
-  const raw = localStorage.getItem("vn_active_streams");
-  return raw ? JSON.parse(raw) : [];
-}
-function setActiveStreams(list: ActiveStream[]) {
-  localStorage.setItem("vn_active_streams", JSON.stringify(list));
-}
-
-export default function Lobby() {
+export default function LobbyPage() {
   const router = useRouter();
-  const { address } = useWallet(); // 🔹 use global wallet
-  const [name, setName] = useState("");
-  const [viewerInput, setViewerInput] = useState("");
-  const [streams, setStreams] = useState<ActiveStream[]>([]);
+  const { address } = useWallet();
 
-  useEffect(() => setStreams(getActiveStreams()), []);
+  const [displayName, setDisplayName] = useState("");
+  const [joinAddress, setJoinAddress] = useState("");
 
-  const defaultEnvStream = useMemo(() => {
-    const s = process.env.NEXT_PUBLIC_STREAMER as `0x${string}` | undefined;
-    return s ? [{ address: s, name: "Demo Stream", startedAt: 0 }] : [];
-  }, []);
-
-  const allStreams = useMemo(
-    () =>
-      [
-        ...defaultEnvStream,
-        ...streams.filter(
-          (s) => !defaultEnvStream.find((d) => d.address.toLowerCase() === s.address.toLowerCase())
-        ),
-      ],
-    [defaultEnvStream, streams]
-  );
-
-  const startStream = () => {
-    if (!address) return alert("Connect your wallet in the header first.");
-    const entry: ActiveStream = {
-      address,
-      name: name || "Untitled Stream",
-      startedAt: Date.now(),
-    };
-    const list = getActiveStreams().filter(
-      (x) => x.address.toLowerCase() !== address.toLowerCase()
-    );
-    setActiveStreams([entry, ...list]);
+  const startStreaming = () => {
+    if (!address) {
+      alert("Connect your wallet in the header first.");
+      return;
+    }
+    // Optional: persist displayName to query, or to your backend if you want.
     router.push(`/stream/${address}`);
   };
 
   const joinStream = () => {
-    const a = viewerInput.trim();
-    if (!/^0x[a-fA-F0-9]{40}$/.test(a)) return alert("Enter a valid streamer address.");
+    const a = joinAddress.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(a)) {
+      alert("Please paste a valid streamer address (0x...)");
+      return;
+    }
     router.push(`/stream/${a}`);
   };
 
   return (
-    <main className="p-6 max-w-3xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
+    <main className="max-w-3xl mx-auto p-6 space-y-10">
+      <section className="space-y-2">
         <h1 className="text-2xl font-bold">VoxNitro Lobby</h1>
-        <div className="text-sm opacity-70">
-          {address ? `Connected: ${address.slice(0,6)}...${address.slice(-4)}` : "Connect in header"}
-        </div>
-      </div>
-
-      {/* START STREAM */}
-      <section className="border rounded-lg p-5 space-y-4">
-        <h2 className="text-lg font-semibold">Start Streaming</h2>
-        <p className="text-sm opacity-70">Your connected wallet will be your streamer address.</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <input
-            className="border rounded px-3 py-2"
-            placeholder="Display name (optional)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Button onClick={startStream} disabled={!address}>
-            {address ? "Start Stream" : "Connect in header"}
-          </Button>
-        </div>
-        {address && <div className="text-xs opacity-70 break-all">Streamer: {address}</div>}
+        <p className="text-sm text-muted-foreground">
+          Tip streamers instantly with PYUSD using LOVE / SMILE / WINK / SUPER — settled via Yellow off-chain channels.
+        </p>
       </section>
 
-      {/* JOIN STREAM */}
-      <section className="border rounded-lg p-5 space-y-4">
-        <h2 className="text-lg font-semibold">Join a Stream</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+      {/* Start Streaming */}
+      <section className="rounded-lg border p-4 space-y-4">
+        <h2 className="text-lg font-semibold">Start Streaming</h2>
+        <p className="text-sm text-muted-foreground">
+          Use your connected wallet as your streamer address.
+        </p>
+
+        <div className="grid gap-2">
+          <label className="text-sm">Display name (optional)</label>
           <input
-            className="border rounded px-3 py-2 col-span-2"
-            placeholder="Paste streamer address (0x...)"
-            value={viewerInput}
-            onChange={(e) => setViewerInput(e.target.value)}
+            className="border rounded px-3 py-2"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Streamer name"
           />
-          <Button onClick={joinStream}>Join</Button>
         </div>
 
-        <div className="mt-3">
-          <div className="text-sm font-medium mb-2">Active Streams</div>
-          {allStreams.length === 0 ? (
-            <div className="text-sm opacity-70">No streams yet. Start one above or paste an address.</div>
-          ) : (
-            <ul className="space-y-2">
-              {allStreams.map((s) => (
-                <li key={s.address} className="flex items-center justify-between border rounded px-3 py-2">
-                  <div>
-                    <div className="font-medium">{s.name}</div>
-                    <div className="text-xs opacity-70 break-all">{s.address}</div>
-                  </div>
-                  <Button onClick={() => router.push(`/stream/${s.address}`)}>Watch</Button>
-                </li>
-              ))}
-            </ul>
-          )}
+        <button
+          onClick={startStreaming}
+          className="inline-flex items-center justify-center rounded bg-primary text-primary-foreground px-4 py-2 disabled:opacity-50"
+          disabled={!address}
+          title={!address ? "Connect wallet in the header" : "Start"}
+        >
+          {address ? "Start Streaming" : "Connect wallet to start"}
+        </button>
+
+        {address && (
+          <div className="text-xs text-muted-foreground">
+            Your streamer address: <span className="font-mono">{address}</span>
+          </div>
+        )}
+      </section>
+
+      {/* Join a Stream */}
+      <section className="rounded-lg border p-4 space-y-4">
+        <h2 className="text-lg font-semibold">Join a Stream</h2>
+        <div className="grid gap-2">
+          <label className="text-sm">Paste streamer address (0x…)</label>
+          <input
+            className="border rounded px-3 py-2"
+            value={joinAddress}
+            onChange={(e) => setJoinAddress(e.target.value)}
+            placeholder="0x..."
+          />
+        </div>
+
+        <button
+          onClick={joinStream}
+          className="inline-flex items-center justify-center rounded bg-secondary text-secondary-foreground px-4 py-2"
+        >
+          Join
+        </button>
+      </section>
+
+      {/* Active Streams (demo card) */}
+      <section className="rounded-lg border p-4 space-y-3">
+        <h2 className="text-lg font-semibold">Active Streams</h2>
+
+        <div className="grid gap-3">
+          <div className="rounded border p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">Demo Stream</div>
+                <div className="text-xs text-muted-foreground break-all">
+                  0x3cC096aE91703a82DC213C349f609671DB4914a9
+                </div>
+              </div>
+              <button
+                onClick={() =>
+                  router.push(
+                    "/stream/0x3cC096aE91703a82DC213C349f609671DB4914a9"
+                  )
+                }
+                className="inline-flex items-center justify-center rounded bg-accent text-accent-foreground px-3 py-2"
+              >
+                Watch
+              </button>
+            </div>
+          </div>
         </div>
       </section>
     </main>
