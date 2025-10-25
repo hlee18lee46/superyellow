@@ -5,6 +5,7 @@ function must<T extends string>(v: T | undefined, name: string): T {
 }
 
 export const ADDR = {
+  REGISTRY: process.env.NEXT_PUBLIC_STREAM_REGISTRY as `0x${string}`,
   PYUSD: must(process.env.NEXT_PUBLIC_PYUSD as `0x${string}` | undefined, "NEXT_PUBLIC_PYUSD"),
   LOVE:  must(process.env.NEXT_PUBLIC_LOVE  as `0x${string}` | undefined, "NEXT_PUBLIC_LOVE"),
   SMILE: must(process.env.NEXT_PUBLIC_SMILE as `0x${string}` | undefined, "NEXT_PUBLIC_SMILE"),
