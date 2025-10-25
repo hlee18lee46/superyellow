@@ -8,6 +8,7 @@ import BadgeCard from "@/components/BadgeCard";
 import { ADDR, BADGES, TIERS } from "@/lib/addresses";
 import { erc20Abi } from "@/types/abi";
 import { publicClient } from "@/lib/viem";
+import { getTokenDecimals } from "@/utils/token";
 
 export default function StreamPage() {
   const params = useParams<{ address: `0x${string}` }>();
@@ -49,13 +50,14 @@ export default function StreamPage() {
   useEffect(() => {
     if (!address) return;
     (async () => {
+      const decimals = await getTokenDecimals(ADDR.PYUSD);   // 👈 6 for PYUSD
       const bal = (await publicClient.readContract({
         address: ADDR.PYUSD,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [address],
       })) as bigint;
-      setPyusdBal(formatUnits(bal, 18));
+      setPyusdBal(formatUnits(bal, decimals));               // 👈 use actual decimals
     })();
   }, [address]);
 
