@@ -1,3 +1,4 @@
+// app/layout.tsx
 import "./globals.css";
 import { WalletProvider } from "@/context/WalletContext";
 import { Header } from "@/components/header";
@@ -8,7 +9,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <WalletProvider>
           <Header />
-          <main className="pt-16">{children}</main>
+          {children}
         </WalletProvider>
       </body>
     </html>

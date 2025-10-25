@@ -1,28 +1,32 @@
 // app/api/yellow/create/route.ts
-import { NitroliteClient } from "@erc7824/nitrolite";
+import { NextResponse } from "next/server";
 
-const client = new NitroliteClient({ url: "wss://clearnet.yellow.com/ws" });
+type CreateBody = {
+  viewer: `0x${string}`;
+  treasury: `0x${string}`;
+  token: `0x${string}`;
+  deposit?: string; // off-chain allowance demo
+};
+
+// simple in-memory store (per dev server)
+const store = (globalThis as any).__VN_YELLOW__ ?? { tips: new Map<string, any[]>() };
+(globalThis as any).__VN_YELLOW__ = store;
 
 export async function POST(req: Request) {
-  const { viewer, treasury, token, deposit } = await req.json();
+  try {
+    const body = (await req.json()) as CreateBody;
 
-  const channel = {
-    participants: [viewer, treasury],
-    adjudicator: "0x0000000000000000000000000000000000000000",
-    challenge: 3600,
-    nonce: Date.now(),
-  };
+    if (!body?.viewer || !body?.treasury || !body?.token) {
+      return NextResponse.json({ ok: false, error: "Missing params" }, { status: 400 });
+    }
 
-  const state = {
-    intent: "INITIALIZE",
-    version: 0,
-    data: "",
-    allocations: [
-      { destination: viewer, token, amount: deposit },
-      { destination: treasury, token, amount: "0" },
-    ],
-  };
+    // Derive a stable “channel id” per viewer for the demo
+    const channelId = `vn-${body.viewer.toLowerCase()}`;
 
-  const channelId = await client.createChannel(channel, state);
-  return Response.json({ channelId });
+    if (!store.tips.has(channelId)) store.tips.set(channelId, []);
+
+    return NextResponse.json({ ok: true, channelId });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
+  }
 }

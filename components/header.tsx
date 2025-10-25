@@ -1,43 +1,83 @@
 "use client";
 
-import { useWallet } from "@/context/WalletContext";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Wallet } from "lucide-react";
+import { useWallet } from "@/context/WalletContext";
+
+async function ensureSepolia() {
+  if (!window?.ethereum) return;
+  const desired = "0xaa36a7"; // 11155111
+  try {
+    await window.ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: desired }],
+    });
+  } catch (e: any) {
+    if (e?.code === 4902) {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: desired,
+            chainName: "Sepolia",
+            nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
+            rpcUrls: [
+              process.env.NEXT_PUBLIC_SEPOLIA_RPC ??
+                "https://sepolia.infura.io/v3/",
+            ],
+            blockExplorerUrls: ["https://sepolia.etherscan.io/"],
+          },
+        ],
+      });
+    } else {
+      console.warn(e);
+    }
+  }
+}
 
 export function Header() {
-  const { address, connect, disconnect } = useWallet();
-
-  const formatAddr = (a: string) => `${a.slice(0, 6)}...${a.slice(-4)}`;
+  const { address, connect, chainId } = useWallet();
+  const fmt = (a: string) => `${a.slice(0, 6)}...${a.slice(-4)}`;
 
   return (
-    <header className="fixed top-0 w-full border-b border-border bg-card/80 backdrop-blur-md z-50">
-      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-            VN
+    <header className="border-b border-border bg-card">
+      <div className="container mx-auto px-4 py-4">
+        {/* Left: logo + name | Right: network + wallet */}
+        <div className="flex items-center justify-between gap-4">
+          {/* LEFT */}
+          <div className="flex items-center gap-3">
+            {/* Replace /logo.svg with your asset in /public */}
+            <div className="relative h-10 w-10 rounded-lg overflow-hidden bg-primary/10">
+              <Image
+                src="/super.png"
+                alt="Only SuperFans logo"
+                fill
+                className="object-contain p-1.5"
+                priority
+              />
+            </div>
+            <div className="leading-tight">
+              <h1 className="text-xl font-bold text-foreground">
+                Only SuperFans
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Superchat tipping with PYUSD
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-lg text-foreground">VoxNitro</h1>
-            <p className="text-xs text-muted-foreground">Instant Superchat Tipping</p>
+
+          {/* RIGHT */}
+          <div className="flex items-center gap-3">
+            {chainId !== null && chainId !== 11155111 && (
+              <Button variant="secondary" onClick={ensureSepolia}>
+                Switch to Sepolia
+              </Button>
+            )}
+            <Button onClick={connect} disabled={!!address} className="min-w-[150px]">
+              {address ? fmt(address) : "Connect Wallet"}
+            </Button>
           </div>
         </div>
-
-        {address ? (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" disabled>
-              <Wallet className="w-4 h-4 mr-2" />
-              {formatAddr(address)}
-            </Button>
-            <Button onClick={disconnect} variant="destructive">
-              Disconnect
-            </Button>
-          </div>
-        ) : (
-          <Button onClick={connect} className="gap-2">
-            <Wallet className="w-4 h-4" />
-            Connect Wallet
-          </Button>
-        )}
       </div>
     </header>
   );

@@ -1,57 +1,47 @@
 // app/api/yellow/tip/route.ts
-import { NitroliteClient } from "@erc7824/nitrolite";
+import { NextResponse } from "next/server";
 
-const client = new NitroliteClient({
-  url: process.env.NEXT_PUBLIC_YELLOW_CLEARNODE!,
-  protocol: "NitroRPC/0.4",
-  privateKey: process.env.YELLOW_APP_PRIVATE_KEY!,
-});
+type TipBody = {
+  channelId: string;
+  viewer: `0x${string}`;
+  streamer: `0x${string}`;
+  treasury: `0x${string}`;
+  token: `0x${string}`;
+  amount: string;          // "1" | "2" | "3" | "5"
+  badge: `0x${string}`;    // LOVE/SMILE/WINK/SUPER address
+  message?: string;
+};
+
+const store = (globalThis as any).__VN_YELLOW__ ?? { tips: new Map<string, any[]>() };
+(globalThis as any).__VN_YELLOW__ = store;
 
 export async function POST(req: Request) {
   try {
-    const { channelId, viewer, treasury, token, amount, badge, message } = await req.json();
+    const body = (await req.json()) as TipBody;
+    const { channelId, viewer, streamer, treasury, token, amount, badge, message } = body || {};
 
-    // Fetch the previous (latest) channel state
-    const prevState = await client.getLatestState(channelId);
+    if (!channelId || !viewer || !streamer || !treasury || !token || !amount || !badge) {
+      return NextResponse.json({ ok: false, error: "Missing params" }, { status: 400 });
+    }
 
-    // Create new off-chain state
-    const newState = {
-      intent: "OPERATE",
-      version: prevState.version + 1,
-      data: JSON.stringify({
-        type: "tip",
-        badge,
-        message,
-        timestamp: Date.now(),
-      }),
-      allocations: [
-        {
-          destination: viewer,
-          token,
-          amount: (
-            BigInt(prevState.allocations[0].amount) - BigInt(amount)
-          ).toString(),
-        },
-        {
-          destination: treasury,
-          token,
-          amount: (
-            BigInt(prevState.allocations[1].amount) + BigInt(amount)
-          ).toString(),
-        },
-      ],
+    const tipsArr: any[] = store.tips.get(channelId) ?? [];
+    const tip = {
+      id: `${channelId}:${Date.now()}`,
+      viewer: viewer.toLowerCase(),
+      streamer: streamer.toLowerCase(),
+      treasury: treasury.toLowerCase(),
+      token: token.toLowerCase(),
+      amount,                 // PYUSD units (human, e.g. "1")
+      badge: badge.toLowerCase(),
+      message: message ?? "",
+      ts: Date.now(),
+      status: "offchain",     // instant UX
     };
+    tipsArr.push(tip);
+    store.tips.set(channelId, tipsArr);
 
-    await client.updateState(channelId, newState);
-
-    return Response.json({
-      ok: true,
-      channelId,
-      version: newState.version,
-      allocations: newState.allocations,
-    });
-  } catch (err: any) {
-    console.error("❌ Yellow tip error:", err);
-    return Response.json({ ok: false, error: err.message }, { status: 500 });
+    return NextResponse.json({ ok: true, tip });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
   }
 }
